@@ -1,6 +1,9 @@
 
-#include <FlexCAN_T4.h>
 #include <EEPROM.h>
+#include <SD.h>
+#include <SPI.h>
+#include <RA8875.h>
+#include <FlexCAN_T4.h>
 
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> can1;
 CAN_message_t msg;
@@ -18,11 +21,17 @@ CAN_message_t msg;
   9. Temperature values should be updated to use the same VTEXT function if the values exceed 100C or go below 10C. Only testing/research will tell.
   Final Instrumentation Layout V1 on 5" display
 */
-//test
 
-#include <SD.h>
-#include <SPI.h>
-#include <RA8875.h>
+//pins
+#define rotaryButton 2  //define rotary encoder
+
+//debug tools
+#define debugMode true     //use to enable all debug commands
+#define overideSensors (debugMode && true)  //overide "X" if sensors are not connected
+#define disableAudio (debugMode && true)  //disable teensy onboard audio
+
+//SD card
+String FILENAME = "flightInfo";
 
 const int chipSelect = BUILTIN_SDCARD;
 
@@ -43,28 +52,26 @@ const int chipSelect = BUILTIN_SDCARD;
 #define TFT_MAGENTA 0xF81F
 #define TFT_PINK    0xF8FF
 
-int str1len = 0;
-int RPMMAX = 3000;
-int RED2 = 2800;
-int YELLOW2 = 2500;
-int GREEN = -1;
-int YELLOW1 = -1;
+#define RPMMAX 3000
+#define RED2 2800
+#define YELLOW2 2500
+#define GREEN -1
+#define YELLOW1 -1
 
 int TXRXtime1 = 0;
 int TXRXtime2 = 0;
 
-int degred2 = 240 - ((270* RED2)/ RPMMAX);
-int degyellow2 = 240 - ((270*YELLOW2)/ RPMMAX);
-int deggreen = 240 - ((270*GREEN) / RPMMAX);
-int degyellow1 = 240 - ((270*YELLOW1) / RPMMAX);
+int degred2 = 240 - ((270 * RED2) / RPMMAX);
+int degyellow2 = 240 - ((270 * YELLOW2) / RPMMAX);
+int deggreen = 240 - ((270 * GREEN) / RPMMAX);
+int degyellow1 = 240 - ((270 * YELLOW1) / RPMMAX);
 
 #include "fonts/akashi_36.c"
 
 String wrap = ";";
 bool READING1 = false;
 bool READING2 = false;
-char str1[30]; //Initialized variable to store recieved data
-char str2[30];
+char str1[30]; //Initialized variable to store recieved data 
 String storesave1 = "";
 String storesave2 = "";
 String storesave = "";
@@ -116,7 +123,6 @@ int rQ = 0;
 int rK = 0;
 int rQi = 0;
 int rKi = 0;
-int scrollcount = 0;
 
 int contemp = 0;
 int mottemp = 0;
@@ -130,8 +136,6 @@ int battempprevy = 425;
 
 double batprev = 0;
 double bat = 0;
-
-bool CONDITION = false;
 
 double batCAP = 50; // Battery Max. Capacity in Ah
 int celln = 28; // number of cells in battery
@@ -168,10 +172,8 @@ int scrolltime = 0;
 
 float aux = 12;
 float auxprev = 12;
-int pushROT = 2;
 unsigned int eeAddress = 0;
 bool buttonON = false;
-bool buttonONprev = false;
 bool arrowTOG = false;
 bool SDlog = false;
 bool resetlight = false;
@@ -183,22 +185,43 @@ int ATBprev = 0;
 
 RA8875 tft = RA8875(RA8875_CS, RA8875_RESET); //Teensy3/arduino's
 
+//-----------------enables debugging values---------------------
+void debugging()
+{
+
+}
 
 // function calling a bar display, with TL and BR coordinates (topx, topy) and (botx, boty), respectively
 // p1, p2, p3, and p4 are the respective pixel heights of the red, yellow, green, and yellow regions
 // the final red region is calculated from the remainder of the height minus the sum of other region heights
-
+void visual2() 
+{
+  //Throttle
+  tft.setCursor(20, 5);
+  tft.println("Throttle");
+  //RPM
+  //Battery
+  //KW
+  //Motor
+  //Contrl
+  //Bat
+  //Time
+  //Energy
+  //Main
+  //Current
+  //Aux
+  //SD/reset
+  //segment display
+  tft.drawLine(0, 230, 330, 230, TFT_GREY); // segmenting display into five parts (top,
+  tft.drawLine(330, 230, 330, 480, TFT_GREY); // flight time, energy consumed, temperatures,
+  tft.drawLine(470, 210, 470, 480, TFT_GREY); // and battery information)
+  tft.drawLine(470, 210, 800, 210, TFT_GREY);
+  tft.drawLine(330, 250, 470, 250, TFT_GREY);
+  tft.drawLine(330, 325, 470, 325, TFT_GREY);
+}
 void visual() {
 
-  tft.drawRect(650, 426, 100, 10, TFT_WHITE);
-
-  if (arrowTOG == false) {
-    tft.fillTriangle(615, 445, 615, 465, 630, 455, TFT_WHITE);
-  }
-  else {
-    tft.fillTriangle(615, 395, 615, 415, 630, 405, TFT_WHITE);
-  }
-
+  
   tft.setTextColor(TFT_WHITE, TFT_BLACK); // static labels
   tft.setFontScale(1);
   tft.setCursor(35, 230);
@@ -212,11 +235,11 @@ void visual() {
   tft.setCursor(660, 385);
   tft.println("RESET");
   tft.setCursor(655, 440);
-  if(SDlog == false){
-  tft.println("SD OFF");
+  if (SDlog == false) {
+    tft.println("SD OFF");
   }
-  if(SDlog == true){
-  tft.println("SD ON");
+  if (SDlog == true) {
+    tft.println("SD ON");
   }
   tft.setFontScale(2);
   tft.setCursor(490, 235);
@@ -249,7 +272,8 @@ void visual() {
   tft.setCursor(585, 155);
   tft.println("KW");
   tft.setFontScale(1);
-  
+
+
   circledisplay(200, 118, 95, 15, -30, 240, degred2, degyellow2, deggreen, degyellow1); // calling all static display symbols
   circledisplay(600, 108, 90, 15, -30, 240, 0, 20, 270, 270);
   vertbardisplay(60, 270, 89, 445, 15, 23, 130, 9);
@@ -277,6 +301,13 @@ void visual() {
   VTEXT(480, 280, 95, 30, 0, voltage, PR, PPR, "V", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
   VTEXT(517, 73, 95, 30, 0, power, PR, PPR, "", 3, 1, 15, 28, 80, 64, 1, TFT_WHITE);
   VTEXT(15, 170, 80, 5, 0, perthrot, PR, PPR, "%", 1, 0.75, 8, 15, 45, 32, 0, TFT_WHITE);
+  tft.drawRect(650, 426, 100, 10, TFT_WHITE);
+  if (arrowTOG == false) {
+    tft.fillTriangle(615, 445, 615, 465, 630, 455, TFT_WHITE);
+  }
+  else {
+    tft.fillTriangle(615, 395, 615, 415, 630, 405, TFT_WHITE);
+  }
 }
 
 void vertbardisplay(int topx, int topy, int botx, int boty, int p1, int p2, int p3, int p4) {
@@ -373,13 +404,19 @@ void circledisplay(int centerx, int centery, int radius, int thickness, int mind
 
 //=========================SETUP=========================
 void setup() {
-
+  if (debugMode)
+  {
+    debugging();
+  }
   tft.begin(RA8875_800x480);
   tft.setTextColor(RA8875_WHITE, RA8875_BLACK);
+  
+  // Open serial communications and wait for port to open:
   Serial.begin(9600); // For debug
-  Serial1.begin(115200);
-  Serial2.begin(115200);
+  Serial1.begin(115200); //Serial Communicaiton over pins 0(RX) and 1(TX)
+  Serial2.begin(115200); //Serial Communicaiton over pins 7(RX) and 8(TX)
 
+  //begin flexcan
   can1.begin();
   can1.setBaudRate(125000);
 
@@ -389,20 +426,25 @@ void setup() {
 
   visual();
 
+  //define pins 9 and 2 and pullups
   pinMode(8, INPUT_PULLUP);
-  pinMode(2, INPUT_PULLUP);
+  pinMode(rotaryButton, INPUT_PULLUP);
 
-  //UNCOMMENT THESE TWO LINES FOR TEENSY AUDIO BOARD:
-  //SPI.setMOSI(7);  // Audio shield has MOSI on pin 7
-  //SPI.setSCK(14);  // Audio shield has SCK on pin 14
+  //enable teensy audio board
+  if(!disableAudio)
+  {
+    SPI.setMOSI(7);  // Audio shield has MOSI on pin 7
+    SPI.setSCK(14);  // Audio shield has SCK on pin 14
+  }
 
-  // Open serial communications and wait for port to open:
-  Serial.begin(9600);
 
+ 
+
+  // see if the card is present and can be initialized: 
   Serial.print("Initializing SD card...");
-
-  // see if the card is present and can be initialized:
-  if (!SD.begin(chipSelect)) {
+  
+  if (!SD.begin(chipSelect)) 
+  {
     Serial.println("Card failed, or not present");
     // don't do anything more:
     return;
@@ -438,7 +480,7 @@ void fillbat(int centerx /* center x */, int centery /* center y*/, int H1 /* he
 
 
 //--------------------function to fill inverse of battery,----------------------
-//    used to fill remainder of battery black and mitigate flicker whenever there 
+//    used to fill remainder of battery black and mitigate flicker whenever there
 //  is a change in the amount of battery that is full (P is percent battery full)
 
 void invfillbat(int centerx, int centery, int H1, int W1, int H2, int W2, double P, uint16_t color) {
@@ -460,7 +502,7 @@ void invfillbat(int centerx, int centery, int H1, int W1, int H2, int W2, double
 }
 
 //----------------function calling the pointer of the dial,---------------------
-//                which is drawn as a triangle with points: 
+//                which is drawn as a triangle with points:
 // (radius-len, deg+(thick/2)), (radius-len, deg-(thick/2)), and (radius, deg)
 
 void dialcirc(int16_t centerx, int16_t centery, int16_t radius, int16_t len, int16_t deg, int16_t thick, uint16_t colorfill, uint16_t colorborder) {
@@ -541,7 +583,7 @@ void vertdialbarcolor (int16_t x, int y, int16_t topy, int16_t boty, int16_t len
   vertdialbar(x, y, len, thick, colord, TFT_WHITE);
 }
 
-// this function can display up to 4-digit values so that the values are almost centered 
+// this function can display up to 4-digit values so that the values are almost centered
 // at the same x position no matter how many digits
 // it erases the readout every time there is a change in the number of digits displayed
 // PR is the current # of digits
@@ -602,111 +644,112 @@ void VTEXT(int x, int y, int buf, int adjx, int adjy, double per, int PR, int PP
 
 
 //------------------size Directory------------------------
+//  this function simply finds and returns the number of
+// files on SD card with the same "FILENAME"
 
-int sizeDirectory(File dir, int numTabs) {
+int sizeDirectory(File dir,String fileName) {
 
   int k = 0;
   while (true) {
-    k = k + 1;
+    Serial.print(k);
+    Serial.print(" ");
+    
     File entry =  dir.openNextFile();
-    /*
-      Serial.print(entry);
-      Serial.print(",");
-      Serial.println(entry.size());
-    */
+    Serial.println(entry.name());
     if (! entry) {
       break;
     }
+    Serial.println((entry.name()).substring(0,fileName.length())
+    if((entry.name()).length() >= fileName.length())
+    {
+      if((entry.name()).substring(0,fileName.length()) == fileName)
+      {
+        Serial.println((entry.name()).substring(0,fileName.length())
+        k = k + 1;
+      }
+    }
     entry.close();
+    k = k + 1;
   }
   return k;
 
 }
 
-//!!!!!!!!!!!!move this?!!!!!!!!!!! - Caleb
-char FILENAME[10] = "data";
 
-
-//======================= main loop =======================
-void loop() {
+//-----------------read sensors----------------
+// streamlines reading of sensors for ease of 
+// orginization
+void readSensors()
+{
+  buttonON = !digitalRead(rotaryButton);
   
-  /* sizeDirectory(root, 0);*/
-
-  /* String fileindex = "1234";
-    FILENAME[7] = fileindex.charAt(2);
-    Serial.println(FILENAME); */
-
-
+  //------------------------------------------------------------------------
+  //these 2 functions takes data from Serial1 line and stores the data from it into
+  //a string called "store save". Serial Readings must begin with ";"
   if ((Serial1.available()) && (READING1 == false)) {
     TXRXtime1 = millis() + 10;
     READING1 = true;
-  }
-
-  if ((TXRXtime1 < millis()) && (READING1 == true)){
-
-    int i1=0;
+  } 
+  
+  if ((TXRXtime1 < millis()) && (READING1 == true)) {
+    int i = 0;
     storesave1 = ",";
-    while(Serial1.available() && i1<30) {
-      str1[i1++] = Serial1.read();
-      if (String(str1[0]) != ";"){
+    while (Serial1.available() && i < 30) {
+      str1[i++] = Serial1.read();
+      if (String(str1[0]) != ";") {
         break;
       }
-      if(i1>0){
-        storesave1 += String(str1[i1]);
+      if (i > 0) {
+        storesave1 += String(str1[i]);
       }
     }
-    str1[i1++]='\0';
+    str1[i++] = '\0';
     READING1 = false;
   }
-
+  
   if ((Serial2.available()) && (READING2 == false)) {
     TXRXtime2 = millis() + 10;
     READING2 = true;
   }
 
-  if ((TXRXtime2 < millis()) && (READING2 == true)){
+  if ((TXRXtime2 < millis()) && (READING2 == true)) {
 
-    int i2=0;
+    int i = 0;
     storesave2 = ",";
-    while(Serial2.available() && i2<30) {
-      str2[i2++] = Serial2.read();
-      if (String(str2[0]) != ";"){
+    while (Serial2.available() && i < 30) {
+      str1[i++] = Serial2.read();
+      if (String(str1[0]) != ";") {
         break;
       }
-      if(i2>0){
-        storesave2 += String(str2[i2]);
+      if (i > 0) {
+        storesave2 += String(str1[i]);
       }
     }
-    str2[i2++]='\0';
-    READING2= false;
+    str1[i++] = '\0';
+    READING2 = false;
   }
+  //---------------------------------------------------
+  
+}
 
+
+//======================= main loop =======================
+void loop() {
+  
+  readSensors();
+
+  //code that will log data onto the SD card
   if ((SDlog == true) && (sdTime < millis())) {
-    
+    //creates a new name for data, by finding the file number (starting with 0,)
+    //then adding that number to the end of file
     if (newname == true) {
-
+      
       File root = SD.open("/");
-      int A = sizeDirectory(root, 0) - 2;
-      String V1 = String(A);
+      int A = sizeDirectory(root);
       root.close();
-
-      if ((A > 0) && (A < 10)) {
-        FILENAME[4] = V1.charAt(0);
-      }
-
-      if ((A >= 10) && (A < 100)) {
-        FILENAME[4] = V1.charAt(0);
-        FILENAME[5] = V1.charAt(1);
-      }
-
-      int Q = 5 + floor(log10(A));
-
-      for (int i = 0; i < 4; i++) {
-        if (A == 0) {
-          Q = 4;
-        }
-        FILENAME[Q + i] = csv.charAt(i);
-      }
+      
+      FILENAME += String(A);
+      FILENAME += ".csv";
 
       newname = false;
       initialT = millis();
@@ -738,9 +781,13 @@ void loop() {
     dataString += ",";
     dataString += String(AMPHR);
 
-    File dataFile = SD.open(FILENAME, FILE_WRITE);
-    
-
+    //converts FILENAME to a pointer char (necessay for SD.open)
+    char FILENAMEchar[FILENAME.length()];
+    for (int i = 0; i < FILENAME.length(); i++)
+    {
+      FILENAMEchar[i] = FILENAME[i];
+    }
+    File dataFile = SD.open(FILENAMEchar, FILE_WRITE);
     // if the file is available, write to it:
     if (dataFile) {
       dataFile.print(dataString);
@@ -751,14 +798,14 @@ void loop() {
     }
     // if the file isn't open, pop up an error:
     else {
-      Serial.println("error opening datalog.csv");
+      //t Serial.println("error opening datalog.csv");
     }
 
     sdTime = millis() + 100;
   }
-
+  
   if (can1.read(msg)) {
-    
+
     if (msg.id == 346095618) {
 
       voltage = (msg.buf[0] + (256 * msg.buf[1])) / 57.45;
@@ -796,7 +843,7 @@ void loop() {
 
   if (cancount > 600) {
     cancount = 601;
-    canON = false; // CHANGE BACK TO FALSE FOR REAL TEST
+    canON = true; // CHANGE BACK TO FALSE FOR REAL TEST
   }
 
   else {
@@ -905,43 +952,43 @@ void loop() {
 
       dialcirccolor(600, 108, 88, 20, powerdeg, 15, TFT_BLUE, -30, 240, degred2, degyellow2, deggreen, degyellow1);
 
-      if (power != powerprev){
-      VTEXT(517, 73, 95, 30, 0, powerprev, PR, PPR, "", 3, 1, 15, 28, 80, 64, 1, TFT_BLACK);
-      VTEXT(517, 73, 95, 30, 0, power, PR, PPR, "", 3, 1, 15, 28, 80, 64, 1, TFT_WHITE);
+      if (power != powerprev) {
+        VTEXT(517, 73, 95, 30, 0, powerprev, PR, PPR, "", 3, 1, 15, 28, 80, 64, 1, TFT_BLACK);
+        VTEXT(517, 73, 95, 30, 0, power, PR, PPR, "", 3, 1, 15, 28, 80, 64, 1, TFT_WHITE);
       }
 
-      if (perthrot != perthrotprev){
-      VTEXT(15, 170, 80, 5, 0, perthrotprev, PR, PPR, "%", 1, 0.75, 8, 15, 45, 32, 0, TFT_BLACK);
-      VTEXT(15, 170, 80, 5, 0, perthrot, PR, PPR, "%", 1, 0.75, 8, 15, 45, 32, 0, TFT_WHITE);
-      }
-      
-      if (voltage != voltageprev){
-           VTEXT(480, 280, 95, 30, 0, voltageprev, PR, PPR, "V", 3, 1, 15, 28, 80, 64, 0, TFT_BLACK);
-           VTEXT(480, 280, 95, 30, 0, voltage, PR, PPR, "V", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
+      if (perthrot != perthrotprev) {
+        VTEXT(15, 170, 80, 5, 0, perthrotprev, PR, PPR, "%", 1, 0.75, 8, 15, 45, 32, 0, TFT_BLACK);
+        VTEXT(15, 170, 80, 5, 0, perthrot, PR, PPR, "%", 1, 0.75, 8, 15, 45, 32, 0, TFT_WHITE);
       }
 
-      if (current != currentprev){
-      VTEXT(635, 280, 95, 30, 0, currentprev, PR, PPR, "A", 3, 1, 15, 28, 80, 64, 0, TFT_BLACK);
-      VTEXT(635, 280, 95, 30, 0, current, PR, PPR, "A", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);          
+      if (voltage != voltageprev) {
+        VTEXT(480, 280, 95, 30, 0, voltageprev, PR, PPR, "V", 3, 1, 15, 28, 80, 64, 0, TFT_BLACK);
+        VTEXT(480, 280, 95, 30, 0, voltage, PR, PPR, "V", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
       }
-      
-      vertdialbar(62, v9y, 10, 10, TFT_WHITE, TFT_WHITE);     
+
+      if (current != currentprev) {
+        VTEXT(635, 280, 95, 30, 0, currentprev, PR, PPR, "A", 3, 1, 15, 28, 80, 64, 0, TFT_BLACK);
+        VTEXT(635, 280, 95, 30, 0, current, PR, PPR, "A", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
+      }
+
+      vertdialbar(62, v9y, 10, 10, TFT_WHITE, TFT_WHITE);
 
       cellvoltage = voltage / celln ;
       cellvoltageprev = voltageprev / celln ;
 
-      if (cellvoltage != cellvoltageprev){
-      VTEXT(490, 345, 95, 5, 0, cellvoltageprev, PR, PPR, " / CELL", 1, 0.75, 8, 15, 80, 32, 1, TFT_BLACK);
-      VTEXT(490, 345, 95, 5, 0, cellvoltage, PR, PPR, " / CELL", 1, 0.75, 8, 15, 80, 32, 1, TFT_WHITE);
+      if (cellvoltage != cellvoltageprev) {
+        VTEXT(490, 345, 95, 5, 0, cellvoltageprev, PR, PPR, " / CELL", 1, 0.75, 8, 15, 80, 32, 1, TFT_BLACK);
+        VTEXT(490, 345, 95, 5, 0, cellvoltage, PR, PPR, " / CELL", 1, 0.75, 8, 15, 80, 32, 1, TFT_WHITE);
       }
-      
+
       dialcirccolor(200, 118, 93, 20, rpmdeg, 15, TFT_BLUE, -30, 240, 0, 20, 270, 270);
 
-      if (rpm != rpmprev){
-      VTEXT(135, 85, 140, 0, 0, rpmprev, D, DP, "", 3, 1, 15, 28, 80, 64, 0, TFT_BLACK);
-      VTEXT(135, 85, 140, 0, 0, rpm, D, DP, "", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
+      if (rpm != rpmprev) {
+        VTEXT(135, 85, 140, 0, 0, rpmprev, D, DP, "", 3, 1, 15, 28, 80, 64, 0, TFT_BLACK);
+        VTEXT(135, 85, 140, 0, 0, rpm, D, DP, "", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
       }
-      
+
       vertdialbarcolor(91, mottempy, 270, 445, 20, 20, TFT_BLUE, 15, 23, 130, 9);
       vertdialbarcolor(197, contempy, 270, 445, 20, 20, TFT_BLUE, 15, 23, 130, 9);
       vertdialbarcolor(299, battempy, 270, 445, 20, 20, TFT_BLUE, 15, 23, 130, 9);
@@ -967,48 +1014,48 @@ void loop() {
     perprev = int(100 * batprev);
     per = int(100 * bat);
     auxprev = aux;
-    
+
     ATB = millis();
 
-    if (power > 0){
-    KWHR = KWHR + ((ATB - ATBprev) * 0.00000027777777) * (power);
+    if (power > 0) {
+      KWHR = KWHR + ((ATB - ATBprev) * 0.00000027777777) * (power);
     }
 
-    if (current > 0){
-    AMPHR = AMPHR + ((ATB - ATBprev) * 0.000000277777) * (current);
+    if (current > 0) {
+      AMPHR = AMPHR + ((ATB - ATBprev) * 0.000000277777) * (current);
     }
 
-    Serial.println(per);
-    
-    if (AMPHR < 0){
+    //t Serial.println(per);
+
+    if (AMPHR < 0) {
       AMPHR = 0;
     }
 
-    if (KWHR < 0){
+    if (KWHR < 0) {
       AMPHR = 0;
     }
 
-    
-     if (per != perprev){
-    VTEXT(330, 180, 115, 15, 0, perprev, PR, PPR, "%", 3, 1, 15, 28, 80, 64, 0, TFT_BLACK);
-    VTEXT(330, 180, 115, 15, 0, per, PR, PPR, "%", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
+
+    if (per != perprev) {
+      VTEXT(330, 180, 115, 15, 0, perprev, PR, PPR, "%", 3, 1, 15, 28, 80, 64, 0, TFT_BLACK);
+      VTEXT(330, 180, 115, 15, 0, per, PR, PPR, "%", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
     }
 
 
 
 
-     if (ceil(10*KWHR) != ceil(10*KWHRPREV)){
-    VTEXT(378, 360, 105, 10, 0, KWHRPREV, PR, PPR, "kWh", 2, 0.75, -5, 28, 65, 48, 1, TFT_BLACK);
-    VTEXT(378, 360, 105, 10, 0, KWHR, PR, PPR, "kWh", 2, 0.75, -5, 28, 65, 48, 1, TFT_WHITE);
+    if (ceil(10 * KWHR) != ceil(10 * KWHRPREV)) {
+      VTEXT(378, 360, 105, 10, 0, KWHRPREV, PR, PPR, "kWh", 2, 0.75, -5, 28, 65, 48, 1, TFT_BLACK);
+      VTEXT(378, 360, 105, 10, 0, KWHR, PR, PPR, "kWh", 2, 0.75, -5, 28, 65, 48, 1, TFT_WHITE);
     }
 
-Serial.print(ceil(10*AMPHR));
-Serial.print(",");
-Serial.println(ceil(10*AMPHRPREV));
+    //    Serial.print(ceil(10*AMPHR));
+    //    Serial.print(",");
+    //    Serial.println(ceil(10*AMPHRPREV));
 
-    if (ceil(10*AMPHR) != ceil(10*AMPHRPREV)){
-    VTEXT(378, 410, 105, 10, 0, AMPHRPREV, PR, PPR, "Ah", 2, 0.75, -5, 28, 65, 48, 1, TFT_BLACK); // Ah
-    VTEXT(378, 410, 105, 10, 0, AMPHR, PR, PPR, "Ah", 2, 0.75, -5, 28, 65, 48, 1, TFT_WHITE); // Ah
+    if (ceil(10 * AMPHR) != ceil(10 * AMPHRPREV)) {
+      VTEXT(378, 410, 105, 10, 0, AMPHRPREV, PR, PPR, "Ah", 2, 0.75, -5, 28, 65, 48, 1, TFT_BLACK); // Ah
+      VTEXT(378, 410, 105, 10, 0, AMPHR, PR, PPR, "Ah", 2, 0.75, -5, 28, 65, 48, 1, TFT_WHITE); // Ah
     }
 
     AMPHRPREV = AMPHR;
@@ -1045,7 +1092,7 @@ Serial.println(ceil(10*AMPHRPREV));
     }
 
     else {
-      
+
       VTEXT(495, 430, 95, 5, 0, auxavgprev / 10, PR, PPR, "V", 1, 0.75, 8, 15, 80, 32, 1, TFT_BLACK);
       VTEXT(495, 430, 95, 5, 0, auxavg / 10, PR, PPR, "V", 1, 0.75, 8, 15, 80, 32, 1, TFT_WHITE);
       auxavgprev = auxavg;
@@ -1056,6 +1103,7 @@ Serial.println(ceil(10*AMPHRPREV));
     fillbat(400, 105, 150, 100, 20, 50, bat, TFT_GREEN);
     invfillbat(400, 105, 150, 100, 20, 50, bat, TFT_BLACK);
 
+    //actives red "X" if
     if (canON == 0) {
 
       for (int i = 0; i <= 10; i++) {
@@ -1118,14 +1166,7 @@ Serial.println(ceil(10*AMPHRPREV));
     count = count + 1;
 
   }
-
-  if (digitalRead(pushROT) == 0) {
-    buttonON = true;
-  }
-
-  else {
-    buttonON = false;
-  }
+  buttonON = !digitalRead(rotaryButton);
 
   if (buttonON && (pressedTime == 0) && (millis() > betweenpressedTime)) {
 
@@ -1181,35 +1222,28 @@ Serial.println(ceil(10*AMPHRPREV));
 
   rQ = digitalRead(3);
   rK = digitalRead(4);
+  //function for determining which option is selected for rotary encoder
+  if (((rQ != rQi) || (rK != rKi)) && (scrolltime <= millis())) {
+    arrowTOG = !arrowTOG;
 
-  if (((rQ != rQi) or (rK != rKi)) and (scrolltime <= millis())) {
-    if (scrollcount == 1) {
-      CONDITION = true;
-      scrolltime = millis() + 200;
-      scrollcount = 0;
-    }
-    scrollcount = scrollcount + 1;
+//    tft.fillRect(600, 390, 40, 80, TFT_BLACK);
+
+//    if (arrowTOG == true) {
+//      tft.fillTriangle(615, 395, 615, 415, 630, 405, TFT_WHITE);
+//    }
+//
+//    if (arrowTOG == false) {
+//      tft.fillTriangle(615, 445, 615, 465, 630, 455, TFT_WHITE);
+//    }
+    scrolltime = millis() + 200;
   }
 
   rQi = rQ;
   rKi = rK;
-
-  if (CONDITION == true) {
-
-    arrowTOG = !arrowTOG;
-
-    tft.fillRect(600, 390, 40, 80, TFT_BLACK);
-
-    if (arrowTOG == true) {
-      tft.fillTriangle(615, 395, 615, 415, 630, 405, TFT_WHITE);
-    }
-
-    if (arrowTOG == false) {
-      tft.fillTriangle(615, 445, 615, 465, 630, 455, TFT_WHITE);
-    }
-  }
-
-  CONDITION = false;
-  buttonONprev = buttonON;
-
+  
+  //visual();
 }
+/*
+this is how I want the main loop to be partitioned:
+all the logic in the beggining, at the end a visual() function is ran 
+*/
