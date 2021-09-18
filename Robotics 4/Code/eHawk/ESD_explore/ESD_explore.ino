@@ -659,17 +659,16 @@ int sizeDirectory(File dir,String fileName) {
     if (! entry) {
       break;
     }
-    Serial.println((entry.name()).substring(0,fileName.length())
+    // FIX THIS!!!!!!!!!!!
     if((entry.name()).length() >= fileName.length())
     {
+      Serial.println((entry.name()).substring(0,fileName.length())
       if((entry.name()).substring(0,fileName.length()) == fileName)
       {
-        Serial.println((entry.name()).substring(0,fileName.length())
         k = k + 1;
       }
     }
     entry.close();
-    k = k + 1;
   }
   return k;
 
