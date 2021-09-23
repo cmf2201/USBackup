@@ -1,9 +1,12 @@
 
+
+
 #include <EEPROM.h>
 #include <SD.h>
 #include <SPI.h>
 #include <RA8875.h>
 #include <FlexCAN_T4.h>
+#include <TimeLib.h>
 
 FlexCAN_T4<CAN1, RX_SIZE_256, TX_SIZE_16> can1;
 CAN_message_t msg;
@@ -31,7 +34,9 @@ CAN_message_t msg;
 #define disableAudio (debugMode && true)  //disable teensy onboard audio
 
 //SD card
-String FILENAME = "flightInfo";
+String fileNAME = "testFlight2";
+
+String FILENAME = fileNAME;
 
 const int chipSelect = BUILTIN_SDCARD;
 
@@ -219,6 +224,7 @@ void visual2()
   tft.drawLine(330, 250, 470, 250, TFT_GREY);
   tft.drawLine(330, 325, 470, 325, TFT_GREY);
 }
+
 void visual() {
 
   
@@ -646,30 +652,28 @@ void VTEXT(int x, int y, int buf, int adjx, int adjy, double per, int PR, int PP
 //------------------size Directory------------------------
 //  this function simply finds and returns the number of
 // files on SD card with the same "FILENAME"
+//NOTE: This may overwrite files in the same directory
+// if the files are not in conceutive order 
 
 int sizeDirectory(File dir,String fileName) {
 
   int k = 0;
   while (true) {
-    Serial.print(k);
-    Serial.print(" ");
-    
     File entry =  dir.openNextFile();
-    Serial.println(entry.name());
     if (! entry) {
       break;
     }
-    // FIX THIS!!!!!!!!!!!
-    if((entry.name()).length() >= fileName.length())
+    //checks how many other files of the same name exist    
+    if(String(entry.name()).length() >= fileName.length())
     {
-      Serial.println((entry.name()).substring(0,fileName.length())
-      if((entry.name()).substring(0,fileName.length()) == fileName)
+      if(String(entry.name()).substring(0,fileName.length()) == fileName)
       {
         k = k + 1;
       }
     }
     entry.close();
   }
+  
   return k;
 
 }
@@ -739,17 +743,23 @@ void loop() {
 
   //code that will log data onto the SD card
   if ((SDlog == true) && (sdTime < millis())) {
-    //creates a new name for data, by finding the file number (starting with 0,)
-    //then adding that number to the end of file
+    //creates a new name for data, by finding using the defined fileNAME 
+    //then adding consecutive numbers to the end of file (starting with 0)
     if (newname == true) {
-      
-      File root = SD.open("/");
-      int A = sizeDirectory(root);
-      root.close();
-      
-      FILENAME += String(A);
+      //reset Filename
+      FILENAME = fileNAME;
+      //File root = SD.open("/");
+      //int A = sizeDirectory(root,FILENAME);
+      //root.close();
+      String bruh = String(month());
+      Serial.println();
+      FILENAME += monthShortStr(month());
+      //+ "_" + dayShortStr(weekday())
+      //+ "_" + String(year()) + "_" + String(hour()) + "_" + String(minute()) + "_" + String(second()))      FILENAME += "_";
+      FILENAME += dayShortStr(weekday()); //this is causing problems??
       FILENAME += ".csv";
-
+      Serial.println("TEST");
+      Serial.println(FILENAME);
       newname = false;
       initialT = millis();
 
@@ -786,9 +796,12 @@ void loop() {
     {
       FILENAMEchar[i] = FILENAME[i];
     }
+    Serial.println("TEST");
+    Serial.println(FILENAMEchar);
     File dataFile = SD.open(FILENAMEchar, FILE_WRITE);
     // if the file is available, write to it:
     if (dataFile) {
+      Serial.println("TEST2");
       dataFile.print(dataString);
       dataFile.print(storesave1);
       dataFile.println(storesave2);
@@ -797,7 +810,7 @@ void loop() {
     }
     // if the file isn't open, pop up an error:
     else {
-      //t Serial.println("error opening datalog.csv");
+      Serial.println("error opening datalog.csv");
     }
 
     sdTime = millis() + 100;
