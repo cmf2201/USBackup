@@ -34,11 +34,29 @@ CAN_message_t msg;
 #define disableAudio (debugMode && true)  //disable teensy onboard audio
 
 //SD card
-String fileNAME = "testFlight2";
-
+#define SDLoggingDelay 100
+String fileDir = "flights";
+String fileNAME = "testFlight";
 String FILENAME = fileNAME;
-
 const int chipSelect = BUILTIN_SDCARD;
+
+//flight time
+long int flightStart;
+long int runningSeconds;
+
+int seconds;
+int minutes;
+int hours;
+  
+int v9y;
+int rpmdeg;
+
+float power;
+int powerdeg;
+
+int mottempy;
+int battempy;
+int contempy;
 
 #define RA8875_CS 10 //see below...
 #define RA8875_RESET 9//any pin or nothing!
@@ -83,7 +101,7 @@ String storesave = "";
 
 float voltage = 0;
 float voltageprev = 0;
-int voltyprev = 425;
+//int voltyprev = 425; not being used
 float current = 0;
 float currentprev = 0;
 float rpm = 0;
@@ -92,7 +110,6 @@ float rpmdegprev = 240;
 int perthrot = 0;
 int perthrotprev = 0;
 float powerdegprev = 0;
-float power = 0;
 float powerprev = 0;
 int v9yprev = 100;
 
@@ -110,11 +127,10 @@ int v3 = 500;
 int v4 = 500;
 int v5 = 500;
 int v6 = 0;
-int v7 = 0;
 int val4prev = 0; // previous values to update for checking changes
-int val5prev = 0;
-int val6prev = 0;
-int val7prev = 0;
+//int val5prev = 0;
+//int val6prev = 0;
+//int val7prev = 0; not being used
 int v8prev = 0;
 int v8 = 0;
 int v9prev = 0;
@@ -162,12 +178,12 @@ float auxavgprev = 0;
 double cellvoltage = 0;
 double cellvoltageprev = 0;
 
-int getdata = 1;
-int getdataprev = 1;
+bool getdata = true;
+bool getdataprev = true;
 int cancount = 0;
 int cantime = 0;
-bool canON = false;
-bool canONprev = false;
+bool canON = true;
+bool canONprev = true;
 
 int PPR = 3;
 int PR = 3;
@@ -199,122 +215,6 @@ void debugging()
 // function calling a bar display, with TL and BR coordinates (topx, topy) and (botx, boty), respectively
 // p1, p2, p3, and p4 are the respective pixel heights of the red, yellow, green, and yellow regions
 // the final red region is calculated from the remainder of the height minus the sum of other region heights
-void visual2() 
-{
-  //Throttle
-  tft.setCursor(20, 5);
-  tft.println("Throttle");
-  //RPM
-  //Battery
-  //KW
-  //Motor
-  //Contrl
-  //Bat
-  //Time
-  //Energy
-  //Main
-  //Current
-  //Aux
-  //SD/reset
-  //segment display
-  tft.drawLine(0, 230, 330, 230, TFT_GREY); // segmenting display into five parts (top,
-  tft.drawLine(330, 230, 330, 480, TFT_GREY); // flight time, energy consumed, temperatures,
-  tft.drawLine(470, 210, 470, 480, TFT_GREY); // and battery information)
-  tft.drawLine(470, 210, 800, 210, TFT_GREY);
-  tft.drawLine(330, 250, 470, 250, TFT_GREY);
-  tft.drawLine(330, 325, 470, 325, TFT_GREY);
-}
-
-void visual() {
-
-  
-  tft.setTextColor(TFT_WHITE, TFT_BLACK); // static labels
-  tft.setFontScale(1);
-  tft.setCursor(35, 230);
-  tft.println("Motor");
-  tft.setCursor(135, 230);
-  tft.println("Contrl");
-  tft.setCursor(260, 230);
-  tft.println("Bat");
-  tft.setCursor(520, 395);
-  tft.println("Aux");
-  tft.setCursor(660, 385);
-  tft.println("RESET");
-  tft.setCursor(655, 440);
-  if (SDlog == false) {
-    tft.println("SD OFF");
-  }
-  if (SDlog == true) {
-    tft.println("SD ON");
-  }
-  tft.setFontScale(2);
-  tft.setCursor(490, 235);
-  tft.println("Main");
-  tft.setCursor(620, 235);
-  tft.println("Current");
-
-  tft.setFontScale(0.75);
-  tft.setCursor(103, 463);
-  tft.println("C");
-  tft.drawCircle(100, 463, 2, TFT_WHITE);
-  tft.setCursor(209, 463);
-  tft.println("C");
-  tft.drawCircle(206, 463, 2, TFT_WHITE);
-  tft.setCursor(311, 463);
-  tft.println("C");
-  tft.drawCircle(308, 463, 2, TFT_WHITE);
-  tft.setCursor(345, 255);
-  tft.println("Hours");
-  tft.setCursor(405, 255);
-  tft.println("Minutes");
-  tft.setCursor(340, 340);
-  tft.println("Energy Consumed");
-  tft.setCursor(20, 5);
-  tft.println("Throttle");
-
-  tft.setFontScale(2);
-  tft.setCursor(185, 175);
-  tft.println("RPM");
-  tft.setCursor(585, 155);
-  tft.println("KW");
-  tft.setFontScale(1);
-
-
-  circledisplay(200, 118, 95, 15, -30, 240, degred2, degyellow2, deggreen, degyellow1); // calling all static display symbols
-  circledisplay(600, 108, 90, 15, -30, 240, 0, 20, 270, 270);
-  vertbardisplay(60, 270, 89, 445, 15, 23, 130, 9);
-  vertbardisplay(166, 270, 195, 445, 15, 23, 130, 9);
-  vertbardisplay(268, 270, 297, 445, 15, 23, 130, 9);
-  linedisp(60, 30, 130, 3, 10, 20);
-  battery(400, 105, 150, 100, 20, 50);
-
-  tft.drawLine(0, 230, 330, 230, TFT_GREY); // segmenting display into five parts (top, flight time, energy consumed, temperatures, and battery information)
-  tft.drawLine(330, 230, 330, 480, TFT_GREY);
-  tft.drawLine(470, 210, 470, 480, TFT_GREY);
-  tft.drawLine(470, 210, 800, 210, TFT_GREY);
-  tft.drawLine(330, 250, 470, 250, TFT_GREY);
-  tft.drawLine(330, 325, 470, 325, TFT_GREY);
-
-  bat = (float)map((batCAP - AMPHR), 0, batCAP, 0, 100) / 100;
-  per = int(100 * bat);
-
-  VTEXT(378, 410, 105, 10, 0, AMPHR, PR, PPR, "Ah", 2, 0.75, -5, 28, 65, 48, 1, TFT_WHITE); // Ah
-  VTEXT(378, 360, 105, 10, 0, KWHR, PR, PPR, "kWh", 2, 0.75, -5, 28, 65, 48, 1, TFT_WHITE);
-  VTEXT(330, 180, 115, 15, 0, per, PR, PPR, "%", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
-  VTEXT(135, 85, 140, 0, 0, rpm, D, DP, "", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
-  VTEXT(490, 345, 95, 5, 0, cellvoltage, PR, PPR, " / CELL", 1, 0.75, 8, 15, 80, 32, 1, TFT_WHITE);
-  VTEXT(635, 280, 95, 30, 0, current, PR, PPR, "A", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
-  VTEXT(480, 280, 95, 30, 0, voltage, PR, PPR, "V", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
-  VTEXT(517, 73, 95, 30, 0, power, PR, PPR, "", 3, 1, 15, 28, 80, 64, 1, TFT_WHITE);
-  VTEXT(15, 170, 80, 5, 0, perthrot, PR, PPR, "%", 1, 0.75, 8, 15, 45, 32, 0, TFT_WHITE);
-  tft.drawRect(650, 426, 100, 10, TFT_WHITE);
-  if (arrowTOG == false) {
-    tft.fillTriangle(615, 445, 615, 465, 630, 455, TFT_WHITE);
-  }
-  else {
-    tft.fillTriangle(615, 395, 615, 415, 630, 405, TFT_WHITE);
-  }
-}
 
 void vertbardisplay(int topx, int topy, int botx, int boty, int p1, int p2, int p3, int p4) {
   tft.fillRect(topx, topy, botx - topx, p1, TFT_RED);
@@ -407,60 +307,6 @@ void circledisplay(int centerx, int centery, int radius, int thickness, int mind
   tft.drawLine(radius * cos((maxdeg + 1)*PI / 180.0) + centerx, radius * sin(-(maxdeg + 1)*PI / 180.0) + centery, (radius + thickness)*cos((maxdeg + 1)*PI / 180.0) + centerx, (radius + thickness)*sin(-(maxdeg + 1)*PI / 180.0) + centery, TFT_WHITE);
 }
 
-
-//=========================SETUP=========================
-void setup() {
-  if (debugMode)
-  {
-    debugging();
-  }
-  tft.begin(RA8875_800x480);
-  tft.setTextColor(RA8875_WHITE, RA8875_BLACK);
-  
-  // Open serial communications and wait for port to open:
-  Serial.begin(9600); // For debug
-  Serial1.begin(115200); //Serial Communicaiton over pins 0(RX) and 1(TX)
-  Serial2.begin(115200); //Serial Communicaiton over pins 7(RX) and 8(TX)
-
-  //begin flexcan
-  can1.begin();
-  can1.setBaudRate(125000);
-
-  EEPROM.get(eeAddress, KWHR);
-  eeAddress += sizeof(float);
-  EEPROM.get(eeAddress, AMPHR);
-
-  visual();
-
-  //define pins 9 and 2 and pullups
-  pinMode(8, INPUT_PULLUP);
-  pinMode(rotaryButton, INPUT_PULLUP);
-
-  //enable teensy audio board
-  if(!disableAudio)
-  {
-    SPI.setMOSI(7);  // Audio shield has MOSI on pin 7
-    SPI.setSCK(14);  // Audio shield has SCK on pin 14
-  }
-
-
- 
-
-  // see if the card is present and can be initialized: 
-  Serial.print("Initializing SD card...");
-  
-  if (!SD.begin(chipSelect)) 
-  {
-    Serial.println("Card failed, or not present");
-    // don't do anything more:
-    return;
-  }
-  Serial.println("card initialized.");
-
-}
-
-
-
 //-----------------------function to fill battery---------------------------
 
 void fillbat(int centerx /* center x */, int centery /* center y*/, int H1 /* height of middle part*/, int W1 /* width of middle part*/, int H2 /* height of top part */, int W2 /* width of top part */, double P /* percent of battery full */, uint16_t /* color to fill with */color) {
@@ -536,16 +382,14 @@ void countdown (int16_t P) {
 //------------------bar display indicator with global coordinates (x,y)---------------
 
 void vertdialbar (int16_t x, int16_t y, int16_t len, int16_t thick, uint16_t colorfill, uint16_t colorborder) {
-  int x1 = x;
-  int y1 = y;
   int x2 = x + (len);
   int y2 = y + (thick / 2);
   int x3 = x + (len);
   int y3 = y - (thick / 2);
-  tft.fillTriangle(x1, y1, x2, y2, x3, y3, colorfill);
-  tft.drawLine(x1, y1, x2, y2, colorborder);
+  tft.fillTriangle(x, y, x2, y2, x3, y3, colorfill);
+  tft.drawLine(x, y, x2, y2, colorborder);
   tft.drawLine(x2, y2, x3, y3, colorborder);
-  tft.drawLine(x3, y3, x1, y1, colorborder);
+  tft.drawLine(x3, y3, x, y, colorborder);
 }
 
 //------------ determines what the color of the dial indicator/triangle should be-------------
@@ -647,37 +491,158 @@ void VTEXT(int x, int y, int buf, int adjx, int adjy, double per, int PR, int PP
 // LT is large tick lengths (there are always two to begin and end the line display)
 // lxi and lyi are coordinates of display
 // heig is height
+void drawCentreString(const String &buf, int x, int y, uint16_t color)
+{
+    int16_t x1, y1;
+    uint16_t w, h;
+    tft.setTextColor(color);
+    tft.getTextBounds(buf, x, y, &x1, &y1, &w, &h); //calc width of new string
+    tft.setCursor(x - w / 2, y);
+    tft.print(buf);
+}
 
-
-//------------------size Directory------------------------
-//  this function simply finds and returns the number of
-// files on SD card with the same "FILENAME"
-//NOTE: This may overwrite files in the same directory
-// if the files are not in conceutive order 
-
-int sizeDirectory(File dir,String fileName) {
-
-  int k = 0;
-  while (true) {
-    File entry =  dir.openNextFile();
-    if (! entry) {
-      break;
-    }
-    //checks how many other files of the same name exist    
-    if(String(entry.name()).length() >= fileName.length())
-    {
-      if(String(entry.name()).substring(0,fileName.length()) == fileName)
-      {
-        k = k + 1;
-      }
-    }
-    entry.close();
+//=========================SETUP=========================
+void setup() {
+  if (debugMode)
+  {
+    debugging();
   }
+  tft.begin(RA8875_800x480);
+  tft.setTextColor(RA8875_WHITE, RA8875_BLACK);
   
-  return k;
+  // Open serial communications and wait for port to open:
+  Serial.begin(9600); // For debug
+  Serial1.begin(115200); //Serial Communicaiton over pins 0(RX) and 1(TX)
+  Serial2.begin(115200); //Serial Communicaiton over pins 7(RX) and 8(TX)
+
+  //begin flexcan
+  can1.begin();
+  can1.setBaudRate(125000);
+
+  EEPROM.get(eeAddress, KWHR);
+  eeAddress += sizeof(float);
+  EEPROM.get(eeAddress, AMPHR);
+
+  visual();
+
+  //define pins 9 and 2 and pullups
+  pinMode(8, INPUT_PULLUP);
+  pinMode(rotaryButton, INPUT_PULLUP);
+
+  //enable teensy audio board
+  if(!disableAudio)
+  {
+    SPI.setMOSI(7);  // Audio shield has MOSI on pin 7
+    SPI.setSCK(14);  // Audio shield has SCK on pin 14
+  }
+
+
+ 
+
+  // see if the card is present and can be initialized: 
+  Serial.print("Initializing SD card...");
+  
+  if (!SD.begin(chipSelect)) 
+  {
+    Serial.println("Card failed, or not present");
+    // don't do anything more:
+    return;
+  }
+  Serial.println("card initialized.");
 
 }
 
+
+
+
+
+//-------------------SD Save-------------------
+//prints current data readings to SD card
+void SDSave(int logDelay)
+{
+  if ((SDlog == true) && (sdTime < millis())) {
+    //creates a new name for data, by finding and using the defined fileNAME 
+    if (newname == true) {
+      //create a directory to hold the data
+      char FILEDirChar[fileDir.length()];
+      for (int i = 0; i < fileDir.length(); i++)
+      {
+        FILEDirChar[i] = fileDir[i];
+      }
+      if(!SD.exists(FILEDirChar))
+      {
+        SD.mkdir(FILEDirChar);
+      }
+      //creates a new file that is garunteed not to overwrite a previous file
+      int fileNum = 1;
+      while(true)
+      {
+        FILENAME = fileDir + "/" + fileNAME + String(fileNum) + ".csv";
+        char FILENAMEchar[FILENAME.length()];
+        for (int i = 0; i < FILENAME.length(); i++)
+        {
+          FILENAMEchar[i] = FILENAME[i];
+        }
+        fileNum++;
+        if(!SD.exists(FILENAMEchar))
+        {
+          break;
+        }
+      }
+      newname = false;
+      initialT = millis();
+
+    }
+    //log current data
+    int logTime = millis() - initialT;
+
+    String dataString = "";
+    dataString += String(logTime);
+    dataString += ",";
+    dataString += String(voltage);
+    dataString += ",";
+    dataString += String(aux);
+    dataString += ",";
+    dataString += String(current);
+    dataString += ",";
+    dataString += String(rpm);
+    dataString += ",";
+    dataString += String(perthrot);
+    dataString += ",";
+    dataString += String(contemp);
+    dataString += ",";
+    dataString += String(mottemp);
+    dataString += ",";
+    dataString += String(battemp);
+    dataString += ",";
+    dataString += String(KWHR);
+    dataString += ",";
+    dataString += String(AMPHR);
+
+    //converts FILENAME to a pointer char (necessay for SD.open)
+    char FILENAMEchar[FILENAME.length()];
+    for (int i = 0; i < FILENAME.length(); i++)
+    {
+      FILENAMEchar[i] = FILENAME[i];
+    }
+    File dataFile = SD.open(FILENAMEchar, FILE_WRITE);
+    
+    // if the file is available, write to it:
+    if (dataFile) {
+      
+      dataFile.print(dataString);
+      dataFile.print(storesave1);
+      dataFile.println(storesave2);
+      dataFile.close();
+    }
+    // if the file isn't open, pop up an error:
+    else 
+    {
+      Serial.println("error opening datalog.csv");
+    }
+    sdTime = millis() + logDelay;
+  }
+}
 
 //-----------------read sensors----------------
 // streamlines reading of sensors for ease of 
@@ -685,7 +650,70 @@ int sizeDirectory(File dir,String fileName) {
 void readSensors()
 {
   buttonON = !digitalRead(rotaryButton);
+  //---------------------------------------------------
+  //gets data from the can bus
+  if (can1.read(msg)) {
+
+    if (msg.id == 346095618) {
+
+      voltage = (msg.buf[0] + (256 * msg.buf[1])) / 57.45;
+      current = (msg.buf[2] + (256 * msg.buf[3])) / 10;
+      rpm = (msg.buf[4] + (256 * msg.buf[5]) + (65536 * msg.buf[6])) * 10;
+
+    }
+
+    if (msg.id == 346095619) {
+
+      contemp = msg.buf[4];
+      mottemp = msg.buf[5];
+      battemp = msg.buf[6];
+
+    }
+
+    if (msg.id == 346095620) {
+
+      perthrot = (msg.buf[2] + (256 * msg.buf[3])) / 10;
+
+    }
+
+    getdata = !getdata;
+
+  }
+  //determines whether or not to display statistics on screen by checking if data is updating
+  if (getdataprev != getdata) {
+    cancount = 0;
+    canON = true;
+    visual();
+  }
+  else
+  {
+    cancount++;
+  }
   
+  if ((cancount > 600) && (canON)) {
+    canON = overideSensors; 
+    if(!overideSensors)
+    {
+      flightStart = millis();
+    }
+  }
+  //-----------------------------------------------------------------------
+  //processes data
+  runningSeconds = floor((millis()-flightStart)/1000);
+  seconds = runningSeconds%60;
+  minutes = int(floor(runningSeconds/60))%60;
+  hours = int(floor(runningSeconds/3600))%60;
+  
+  v9y = map(perthrot, 100, 0, 30, 160);
+  rpmdeg = map(rpm, 0, RPMMAX, 240, -30);
+
+  //power = ((voltage * current) / 1000);
+  powerdeg = map(int(power), 0, 20, 240, -30);
+
+  mottempy = map(mottemp, 99, 0, 270, 445);
+  battempy = map(battemp, 99, 0, 270, 445);
+  contempy = map(contemp, 99, 0, 270, 445);
+
   //------------------------------------------------------------------------
   //these 2 functions takes data from Serial1 line and stores the data from it into
   //a string called "store save". Serial Readings must begin with ";"
@@ -734,171 +762,109 @@ void readSensors()
   //---------------------------------------------------
   
 }
-
-
-//======================= main loop =======================
-void loop() {
-  
-  readSensors();
-
-  //code that will log data onto the SD card
-  if ((SDlog == true) && (sdTime < millis())) {
-    //creates a new name for data, by finding using the defined fileNAME 
-    //then adding consecutive numbers to the end of file (starting with 0)
-    if (newname == true) {
-      //reset Filename
-      FILENAME = fileNAME;
-      //File root = SD.open("/");
-      //int A = sizeDirectory(root,FILENAME);
-      //root.close();
-      String bruh = String(month());
-      Serial.println();
-      FILENAME += monthShortStr(month());
-      //+ "_" + dayShortStr(weekday())
-      //+ "_" + String(year()) + "_" + String(hour()) + "_" + String(minute()) + "_" + String(second()))      FILENAME += "_";
-      FILENAME += dayShortStr(weekday()); //this is causing problems??
-      FILENAME += ".csv";
-      Serial.println("TEST");
-      Serial.println(FILENAME);
-      newname = false;
-      initialT = millis();
-
-    }
-
-    int logTime = millis() - initialT;
-
-    String dataString = "";
-    dataString += String(logTime);
-    dataString += ",";
-    dataString += String(voltage);
-    dataString += ",";
-    dataString += String(aux);
-    dataString += ",";
-    dataString += String(current);
-    dataString += ",";
-    dataString += String(rpm);
-    dataString += ",";
-    dataString += String(perthrot);
-    dataString += ",";
-    dataString += String(contemp);
-    dataString += ",";
-    dataString += String(mottemp);
-    dataString += ",";
-    dataString += String(battemp);
-    dataString += ",";
-    dataString += String(KWHR);
-    dataString += ",";
-    dataString += String(AMPHR);
-
-    //converts FILENAME to a pointer char (necessay for SD.open)
-    char FILENAMEchar[FILENAME.length()];
-    for (int i = 0; i < FILENAME.length(); i++)
+void visual2() 
+{
+  //Throttle
+  //values that only update if receiving values
+  if(canON)
+  {
+    if (rpmdegprev != rpmdeg) 
     {
-      FILENAMEchar[i] = FILENAME[i];
-    }
-    Serial.println("TEST");
-    Serial.println(FILENAMEchar);
-    File dataFile = SD.open(FILENAMEchar, FILE_WRITE);
-    // if the file is available, write to it:
-    if (dataFile) {
-      Serial.println("TEST2");
-      dataFile.print(dataString);
-      dataFile.print(storesave1);
-      dataFile.println(storesave2);
-      dataFile.close();
-      // print to the serial port too:
-    }
-    // if the file isn't open, pop up an error:
-    else {
-      Serial.println("error opening datalog.csv");
+      dialcirc(200, 118, 93, 20, rpmdegprev, 15, TFT_BLACK, TFT_BLACK);
     }
 
-    sdTime = millis() + 100;
+    vertdialbar(91, v1, 20, 20, TFT_BLACK, TFT_BLACK);
+    vertdialbar(197, v2, 20, 20, TFT_BLACK, TFT_BLACK);
+    vertdialbar(299, v3, 20, 20, TFT_BLACK, TFT_BLACK);
+
+    if (v9yprev != v9y) {
+      vertdialbar(62, v9yprev, 10, 10, TFT_BLACK, TFT_BLACK);
+    }
+
+    if (powerprev != power) {
+      dialcirc(600, 108, 88, 20, powerdegprev, 15, TFT_BLACK, TFT_BLACK);
+    }
+
+    if (mottemp != mottempprev) {
+      vertdialbar(91, mottempprevy, 20, 20, TFT_BLACK, TFT_BLACK);
+    }
+
+    if (battemp != battempprev) {
+      vertdialbar(299, battempprevy, 20, 20, TFT_BLACK, TFT_BLACK);
+    }
+
+    if (contemp != contempprev) {
+      vertdialbar(197, contempprevy, 20, 20, TFT_BLACK, TFT_BLACK);
+    }
+
+
+    dialcirccolor(600, 108, 88, 20, powerdeg, 15, TFT_BLUE, -30, 240, degred2, degyellow2, deggreen, degyellow1);
+    //VTEXT(517, 73, 95, 30, 0, 1000, PR, PPR, "", 3, 1, 15, 28, 80, 64, 1, TFT_WHITE);
+    if (power != powerprev) {
+      tft.setFontScale(1.75);
+      Serial.println(powerprev);
+      Serial.println(power);
+      drawCentreString(String(powerprev),600,85,TFT_BLACK);
+      drawCentreString(String(power),600,85,TFT_WHITE);
+//      VTEXT(517, 73, 95, 30, 0, powerprev, PR, PPR, "", 3, 1, 15, 28, 80, 64, 1, TFT_BLACK);
+//      VTEXT(517, 73, 95, 30, 0, power, PR, PPR, "", 3, 1, 15, 28, 80, 64, 1, TFT_WHITE);
+    }
+
+    if (perthrot != perthrotprev) {
+      VTEXT(15, 170, 80, 5, 0, perthrotprev, PR, PPR, "%", 1, 0.75, 8, 15, 45, 32, 0, TFT_BLACK);
+      VTEXT(15, 170, 80, 5, 0, perthrot, PR, PPR, "%", 1, 0.75, 8, 15, 45, 32, 0, TFT_WHITE);
+    }
+
+    if (voltage != voltageprev) {
+      VTEXT(480, 280, 95, 30, 0, voltageprev, PR, PPR, "V", 3, 1, 15, 28, 80, 64, 0, TFT_BLACK);
+      VTEXT(480, 280, 95, 30, 0, voltage, PR, PPR, "V", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
+    }
+
+    if (current != currentprev) {
+      VTEXT(635, 280, 95, 30, 0, currentprev, PR, PPR, "A", 3, 1, 15, 28, 80, 64, 0, TFT_BLACK);
+      VTEXT(635, 280, 95, 30, 0, current, PR, PPR, "A", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
+    }
+
+    vertdialbar(62, v9y, 10, 10, TFT_WHITE, TFT_WHITE);
+
+    cellvoltage = voltage / celln ;
+    cellvoltageprev = voltageprev / celln ;
+Serial.println("TEST");
+    if (cellvoltage != cellvoltageprev) {
+      VTEXT(490, 345, 95, 5, 0, cellvoltageprev, PR, PPR, " / CELL", 1, 0.75, 8, 15, 80, 32, 1, TFT_BLACK);
+      VTEXT(490, 345, 95, 5, 0, cellvoltage, PR, PPR, " / CELL", 1, 0.75, 8, 15, 80, 32, 1, TFT_WHITE);
+    }
+
+    dialcirccolor(200, 118, 93, 20, rpmdeg, 15, TFT_BLUE, -30, 240, 0, 20, 270, 270);
+    
+    //rpm
+    if (rpm != rpmprev) {
+      VTEXT(135, 85, 140, 0, 0, rpmprev, D, DP, "", 3, 1, 15, 28, 80, 64, 0, TFT_BLACK);
+      VTEXT(135, 85, 140, 0, 0, rpm, D, DP, "", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
+    }
+    
+    //Temperature
+    vertdialbarcolor(91, mottempy, 270, 445, 20, 20, TFT_BLUE, 15, 23, 130, 9);
+    vertdialbarcolor(197, contempy, 270, 445, 20, 20, TFT_BLUE, 15, 23, 130, 9);
+    vertdialbarcolor(299, battempy, 270, 445, 20, 20, TFT_BLUE, 15, 23, 130, 9);
+    tft.setFontScale(1);
+    tft.setCursor(60, 450);
+    tft.println(mottemp);
+    tft.setCursor(166, 450);
+    tft.println(contemp);
+    tft.setCursor(268, 450);
+    tft.println(battemp);
   }
   
-  if (can1.read(msg)) {
-
-    if (msg.id == 346095618) {
-
-      voltage = (msg.buf[0] + (256 * msg.buf[1])) / 57.45;
-      current = (msg.buf[2] + (256 * msg.buf[3])) / 10;
-      rpm = (msg.buf[4] + (256 * msg.buf[5]) + (65536 * msg.buf[6])) * 10;
-
-    }
-
-    if (msg.id == 346095619) {
-
-      contemp = msg.buf[4];
-      mottemp = msg.buf[5];
-      battemp = msg.buf[6];
-
-    }
-
-    if (msg.id == 346095620) {
-
-      perthrot = (msg.buf[2] + (256 * msg.buf[3])) / 10;
-
-    }
-
-    getdata = getdata + 1;
-    getdata = getdata % 2;
-
-  }
-
-  if (getdataprev != getdata) {
-    cancount = 0;
-  }
-
-  if (getdataprev == getdata) {
-    cancount = cancount + 1;
-  }
-
-  if (cancount > 600) {
-    cancount = 601;
-    canON = true; // CHANGE BACK TO FALSE FOR REAL TEST
-  }
-
-  else {
-    canON = true;
-  }
-
-
-  //!!!!!!!!!!!!!!!!!! see if this can all be put into a array? !!!!!!!!!!!!!!!!!!!!
-  // mapping parameters that change on a repeated millis() loop according to trigonometric functions
-  int val1 = map(v1, 425, 250, 30, 90);
-  int val2 = map(v2, 425, 250, 10, 35);
-  int val3 = map(v3, 425, 250, 10, 35);
-  int volty = map(voltage, 0, 100, 425, 250);
-  double val5 = map(v5, 425, 250, 80, 130);
-  val5 = val5 / 10;
-  int val6 = map(v6, 425, 250, 0, 25);
-  int val7 = map(v6, 425, 250, 0, 200);
-
-  // calculating hours and minutes from value for flight time
-  int hours = floor(v7 / 60);
-  int minutes = v7 - 60 * floor(v7 / 60);
-
-  int v9y = map(perthrot, 100, 0, 30, 160);
-  int rpmdeg = map(rpm, 0, RPMMAX, 240, -30);
-
-  float power = ((voltage * current) / 1000);
-  int powerdeg = map(int(power), 0, 20, 240, -30);
-
-  int mottempy = map(mottemp, 99, 0, 270, 445);
-  int battempy = map(battemp, 99, 0, 270, 445);
-  int contempy = map(contemp, 99, 0, 270, 445);
-
-  //defining dial display PR and PPR values for all variable text (VTEXT) outputs
-  // only the RPM output uses 4 digits
-
-  // updating display tickers
-
-  // updating variable text values with VTEXT according to current and previous values
-
-  // the only values that do not change # of digits and thus don't need VTEXT are temperature and flight time values, updated in the loop below
-
-  // updating flight time
-
+  
+  
+  //RPM
+  //Battery
+  //KW
+  //Motor
+  //Contrl
+  //Bat
+  //Time
   tft.setFontScale(2);
   tft.setCursor(410, 270);
   if (floor(minutes / 10) == 0) {
@@ -920,98 +886,263 @@ void loop() {
     tft.print(hours);
     tft.println(":");
   }
+  //Energy
+  //Main
+   if (canONprev != canON) 
+   {
+      tft.fillRect(0, 0, 800, 480, TFT_BLACK);
+      visual();
+   }
+  //Current
+  //Aux
+  //SD/reset
+  tft.setFontScale(1);
+  tft.setCursor(655, 440);
+  if (SDlog == false) {
+    tft.println("SD OFF");
+  }
+  if (SDlog == true) {
+    tft.println("SD ON");
+  }
+  tft.drawRect(650, 426, 100, 10, TFT_WHITE);
+  if (arrowTOG == false) {
+    tft.fillTriangle(615, 445, 615, 465, 630, 455, TFT_WHITE);
+  }
+  else {
+    tft.fillTriangle(615, 395, 615, 415, 630, 405, TFT_WHITE);
+  }
+  //segment display
+}
+
+void visual() {
+
+  
+  tft.setTextColor(TFT_WHITE, TFT_BLACK); // static labels
+  tft.setFontScale(1);
+  tft.setCursor(35, 230);
+  tft.println("Motor");
+  tft.setCursor(135, 230);
+  tft.println("Contrl");
+  tft.setCursor(260, 230);
+  tft.println("Bat");
+  tft.setCursor(520, 395);
+  tft.println("Aux");
+  tft.setCursor(660, 385);
+  tft.println("RESET");
+  tft.setCursor(655, 440);
+  tft.setFontScale(2);
+  tft.setCursor(490, 235);
+  tft.println("Main");
+  tft.setCursor(620, 235);
+  tft.println("Current");
+
+  tft.setFontScale(0.75);
+  tft.setCursor(103, 463);
+  tft.println("C");
+  tft.drawCircle(100, 463, 2, TFT_WHITE);
+  tft.setCursor(209, 463);
+  tft.println("C");
+  tft.drawCircle(206, 463, 2, TFT_WHITE);
+  tft.setCursor(311, 463);
+  tft.println("C");
+  tft.drawCircle(308, 463, 2, TFT_WHITE);
+  tft.setCursor(345, 255);
+  tft.println("Hours");
+  tft.setCursor(405, 255);
+  tft.println("Minutes");
+  tft.setCursor(340, 340);
+  tft.println("Energy Consumed");
+  tft.setCursor(20, 5);
+  tft.println("Throttle");
+
+  tft.setFontScale(2);
+  tft.setCursor(185, 175);
+  tft.println("RPM");
+  tft.setCursor(585, 155);
+  tft.println("KW");
+  tft.setFontScale(1);
+
+
+  circledisplay(200, 118, 95, 15, -30, 240, degred2, degyellow2, deggreen, degyellow1); // calling all static display symbols
+  circledisplay(600, 108, 90, 15, -30, 240, 0, 20, 270, 270);
+  vertbardisplay(60, 270, 89, 445, 15, 23, 130, 9);
+  vertbardisplay(166, 270, 195, 445, 15, 23, 130, 9);
+  vertbardisplay(268, 270, 297, 445, 15, 23, 130, 9);
+  linedisp(60, 30, 130, 3, 10, 20);
+  battery(400, 105, 150, 100, 20, 50);
+
+  tft.drawLine(0, 230, 330, 230, TFT_GREY); // segmenting display into five parts (top, flight time, energy consumed, temperatures, and battery information)
+  tft.drawLine(330, 230, 330, 480, TFT_GREY);
+  tft.drawLine(470, 210, 470, 480, TFT_GREY);
+  tft.drawLine(470, 210, 800, 210, TFT_GREY);
+  tft.drawLine(330, 250, 470, 250, TFT_GREY);
+  tft.drawLine(330, 325, 470, 325, TFT_GREY);
+  
+
+  bat = (float)map((batCAP - AMPHR), 0, batCAP, 0, 100) / 100;
+  per = int(100 * bat);
+/*
+  VTEXT(378, 410, 105, 10, 0, AMPHR, PR, PPR, "Ah", 2, 0.75, -5, 28, 65, 48, 1, TFT_WHITE); // Ah
+  VTEXT(378, 360, 105, 10, 0, KWHR, PR, PPR, "kWh", 2, 0.75, -5, 28, 65, 48, 1, TFT_WHITE);
+  VTEXT(330, 180, 115, 15, 0, per, PR, PPR, "%", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
+  VTEXT(135, 85, 140, 0, 0, rpm, D, DP, "", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
+  VTEXT(490, 345, 95, 5, 0, cellvoltage, PR, PPR, " / CELL", 1, 0.75, 8, 15, 80, 32, 1, TFT_WHITE);
+  VTEXT(635, 280, 95, 30, 0, current, PR, PPR, "A", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
+  VTEXT(480, 280, 95, 30, 0, voltage, PR, PPR, "V", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
+  VTEXT(517, 73, 95, 30, 0, power, PR, PPR, "", 3, 1, 15, 28, 80, 64, 1, TFT_WHITE);
+  VTEXT(15, 170, 80, 5, 0, perthrot, PR, PPR, "%", 1, 0.75, 8, 15, 45, 32, 0, TFT_WHITE);
+  */
+}
+
+
+//======================= main loop =======================
+void loop() {
+  
+  readSensors();
+  if (updateTime <= millis()) {
+  power = power +.1;
+  }
+  SDSave(SDLoggingDelay);
+  if (updateTime <= millis()) {
+  visual2();
+  }
+ 
+  //!!!!!!!!!!!!!!!!!! see if this can all be put into a array? !!!!!!!!!!!!!!!!!!!!
+  // mapping parameters that change on a repeated millis() loop according to trigonometric functions
+  //here I comment out values not being refrenced elsewhere
+  /*
+  int val1 = map(v1, 425, 250, 30, 90);
+  int val2 = map(v2, 425, 250, 10, 35);
+  int val3 = map(v3, 425, 250, 10, 35);
+  int volty = map(voltage, 0, 100, 425, 250);
+  double val5 = map(v5, 425, 250, 80, 130);
+  val5 = val5 / 10;
+  int val6 = map(v6, 425, 250, 0, 25);
+  int val7 = map(v6, 425, 250, 0, 200);
+  */
+//  // calculating hours and minutes from value for flight time
+//  runningSeconds = floor((millis()-flightStart)/1000);
+//  int seconds = runningSeconds%60;
+//  int minutes = int(floor(runningSeconds/60))%60;
+//  int hours = int(floor(runningSeconds/3600))%60;
+//  
+//  int v9y = map(perthrot, 100, 0, 30, 160);
+//  int rpmdeg = map(rpm, 0, RPMMAX, 240, -30);
+//
+//  float power = ((voltage * current) / 1000);
+//  int powerdeg = map(int(power), 0, 20, 240, -30);
+//
+//  int mottempy = map(mottemp, 99, 0, 270, 445);
+//  int battempy = map(battemp, 99, 0, 270, 445);
+//  int contempy = map(contemp, 99, 0, 270, 445);
+
+  //defining dial display PR and PPR values for all variable text (VTEXT) outputs
+  // only the RPM output uses 4 digits
+
+  // updating display tickers
+
+  // updating variable text values with VTEXT according to current and previous values
+
+  // the only values that do not change # of digits and thus don't need VTEXT are temperature and flight time values, updated in the loop below
+
+  // updating flight time
+//  
+//  tft.setFontScale(2);
+//  tft.setCursor(410, 270);
+//  if (floor(minutes / 10) == 0) {
+//    tft.print(0);
+//    tft.println(minutes);
+//  }
+//
+//  else {
+//    tft.println(minutes);
+//  }
+//
+//  tft.setCursor(340, 270);
+//  if (floor(hours / 10) == 0) {
+//    tft.print(0);
+//    tft.print(hours);
+//    tft.println(":");
+//  }
+//  else {
+//    tft.print(hours);
+//    tft.println(":");
+//  }
 
   // screen update loop
 
   if (updateTime <= millis()) {
 
-    if (canON == true) {
+    //if (canON == true) {
+//
+//      if (rpmdegprev != rpmdeg) {
+//        dialcirc(200, 118, 93, 20, rpmdegprev, 15, TFT_BLACK, TFT_BLACK);
+//      }
+//
+//      vertdialbar(91, v1, 20, 20, TFT_BLACK, TFT_BLACK);
+//      vertdialbar(197, v2, 20, 20, TFT_BLACK, TFT_BLACK);
+//      vertdialbar(299, v3, 20, 20, TFT_BLACK, TFT_BLACK);
+//
+//      if (v9yprev != v9y) {
+//        vertdialbar(62, v9yprev, 10, 10, TFT_BLACK, TFT_BLACK);
+//      }
+//
+//      if (powerprev != power) {
+//        dialcirc(600, 108, 88, 20, powerdegprev, 15, TFT_BLACK, TFT_BLACK);
+//      }
+//
+//      if (mottemp != mottempprev) {
+//        vertdialbar(91, mottempprevy, 20, 20, TFT_BLACK, TFT_BLACK);
+//      }
+//
+//      if (battemp != battempprev) {
+//        vertdialbar(299, battempprevy, 20, 20, TFT_BLACK, TFT_BLACK);
+//      }
+//
+//      if (contemp != contempprev) {
+//        vertdialbar(197, contempprevy, 20, 20, TFT_BLACK, TFT_BLACK);
+//      }
+//
+//
+//      dialcirccolor(600, 108, 88, 20, powerdeg, 15, TFT_BLUE, -30, 240, degred2, degyellow2, deggreen, degyellow1);
+//
+//      if (power != powerprev) {
+//        VTEXT(517, 73, 95, 30, 0, powerprev, PR, PPR, "", 3, 1, 15, 28, 80, 64, 1, TFT_BLACK);
+//        VTEXT(517, 73, 95, 30, 0, power, PR, PPR, "", 3, 1, 15, 28, 80, 64, 1, TFT_WHITE);
+//      }
+//
+//      if (perthrot != perthrotprev) {
+//        VTEXT(15, 170, 80, 5, 0, perthrotprev, PR, PPR, "%", 1, 0.75, 8, 15, 45, 32, 0, TFT_BLACK);
+//        VTEXT(15, 170, 80, 5, 0, perthrot, PR, PPR, "%", 1, 0.75, 8, 15, 45, 32, 0, TFT_WHITE);
+//      }
+//
+//      if (voltage != voltageprev) {
+//        VTEXT(480, 280, 95, 30, 0, voltageprev, PR, PPR, "V", 3, 1, 15, 28, 80, 64, 0, TFT_BLACK);
+//        VTEXT(480, 280, 95, 30, 0, voltage, PR, PPR, "V", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
+//      }
+//
+//      if (current != currentprev) {
+//        VTEXT(635, 280, 95, 30, 0, currentprev, PR, PPR, "A", 3, 1, 15, 28, 80, 64, 0, TFT_BLACK);
+//        VTEXT(635, 280, 95, 30, 0, current, PR, PPR, "A", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
+//      }
+//
+//      vertdialbar(62, v9y, 10, 10, TFT_WHITE, TFT_WHITE);
+//
+//      cellvoltage = voltage / celln ;
+//      cellvoltageprev = voltageprev / celln ;
+//
+//      if (cellvoltage != cellvoltageprev) {
+//        VTEXT(490, 345, 95, 5, 0, cellvoltageprev, PR, PPR, " / CELL", 1, 0.75, 8, 15, 80, 32, 1, TFT_BLACK);
+//        VTEXT(490, 345, 95, 5, 0, cellvoltage, PR, PPR, " / CELL", 1, 0.75, 8, 15, 80, 32, 1, TFT_WHITE);
+//      }
+//
+//      dialcirccolor(200, 118, 93, 20, rpmdeg, 15, TFT_BLUE, -30, 240, 0, 20, 270, 270);
+//
+//      if (rpm != rpmprev) {
+//        VTEXT(135, 85, 140, 0, 0, rpmprev, D, DP, "", 3, 1, 15, 28, 80, 64, 0, TFT_BLACK);
+//        VTEXT(135, 85, 140, 0, 0, rpm, D, DP, "", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
+//      }
 
-      if (canONprev != canON) {
-        tft.fillRect(0, 0, 800, 480, TFT_BLACK);
-        visual();
-
-      }
-
-      if (rpmdegprev != rpmdeg) {
-        dialcirc(200, 118, 93, 20, rpmdegprev, 15, TFT_BLACK, TFT_BLACK);
-      }
-
-      vertdialbar(91, v1, 20, 20, TFT_BLACK, TFT_BLACK);
-      vertdialbar(197, v2, 20, 20, TFT_BLACK, TFT_BLACK);
-      vertdialbar(299, v3, 20, 20, TFT_BLACK, TFT_BLACK);
-
-      if (v9yprev != v9y) {
-        vertdialbar(62, v9yprev, 10, 10, TFT_BLACK, TFT_BLACK);
-      }
-
-      if (powerprev != power) {
-        dialcirc(600, 108, 88, 20, powerdegprev, 15, TFT_BLACK, TFT_BLACK);
-      }
-
-      if (mottemp != mottempprev) {
-        vertdialbar(91, mottempprevy, 20, 20, TFT_BLACK, TFT_BLACK);
-      }
-
-      if (battemp != battempprev) {
-        vertdialbar(299, battempprevy, 20, 20, TFT_BLACK, TFT_BLACK);
-      }
-
-      if (contemp != contempprev) {
-        vertdialbar(197, contempprevy, 20, 20, TFT_BLACK, TFT_BLACK);
-      }
-
-
-      dialcirccolor(600, 108, 88, 20, powerdeg, 15, TFT_BLUE, -30, 240, degred2, degyellow2, deggreen, degyellow1);
-
-      if (power != powerprev) {
-        VTEXT(517, 73, 95, 30, 0, powerprev, PR, PPR, "", 3, 1, 15, 28, 80, 64, 1, TFT_BLACK);
-        VTEXT(517, 73, 95, 30, 0, power, PR, PPR, "", 3, 1, 15, 28, 80, 64, 1, TFT_WHITE);
-      }
-
-      if (perthrot != perthrotprev) {
-        VTEXT(15, 170, 80, 5, 0, perthrotprev, PR, PPR, "%", 1, 0.75, 8, 15, 45, 32, 0, TFT_BLACK);
-        VTEXT(15, 170, 80, 5, 0, perthrot, PR, PPR, "%", 1, 0.75, 8, 15, 45, 32, 0, TFT_WHITE);
-      }
-
-      if (voltage != voltageprev) {
-        VTEXT(480, 280, 95, 30, 0, voltageprev, PR, PPR, "V", 3, 1, 15, 28, 80, 64, 0, TFT_BLACK);
-        VTEXT(480, 280, 95, 30, 0, voltage, PR, PPR, "V", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
-      }
-
-      if (current != currentprev) {
-        VTEXT(635, 280, 95, 30, 0, currentprev, PR, PPR, "A", 3, 1, 15, 28, 80, 64, 0, TFT_BLACK);
-        VTEXT(635, 280, 95, 30, 0, current, PR, PPR, "A", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
-      }
-
-      vertdialbar(62, v9y, 10, 10, TFT_WHITE, TFT_WHITE);
-
-      cellvoltage = voltage / celln ;
-      cellvoltageprev = voltageprev / celln ;
-
-      if (cellvoltage != cellvoltageprev) {
-        VTEXT(490, 345, 95, 5, 0, cellvoltageprev, PR, PPR, " / CELL", 1, 0.75, 8, 15, 80, 32, 1, TFT_BLACK);
-        VTEXT(490, 345, 95, 5, 0, cellvoltage, PR, PPR, " / CELL", 1, 0.75, 8, 15, 80, 32, 1, TFT_WHITE);
-      }
-
-      dialcirccolor(200, 118, 93, 20, rpmdeg, 15, TFT_BLUE, -30, 240, 0, 20, 270, 270);
-
-      if (rpm != rpmprev) {
-        VTEXT(135, 85, 140, 0, 0, rpmprev, D, DP, "", 3, 1, 15, 28, 80, 64, 0, TFT_BLACK);
-        VTEXT(135, 85, 140, 0, 0, rpm, D, DP, "", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
-      }
-
-      vertdialbarcolor(91, mottempy, 270, 445, 20, 20, TFT_BLUE, 15, 23, 130, 9);
-      vertdialbarcolor(197, contempy, 270, 445, 20, 20, TFT_BLUE, 15, 23, 130, 9);
-      vertdialbarcolor(299, battempy, 270, 445, 20, 20, TFT_BLUE, 15, 23, 130, 9);
-
-      tft.setFontScale(1);
-      tft.setCursor(60, 450);
-      tft.println(mottemp);
-      tft.setCursor(166, 450);
-      tft.println(contemp);
-      tft.setCursor(268, 450);
-      tft.println(battemp);
 
       // store previous values for VTEXT calculations
 
@@ -1020,7 +1151,7 @@ void loop() {
 
       // update battery display
 
-    }
+    //}
 
     bat = (float)map((batCAP - AMPHR), 0, batCAP, 0, 100) / 100;
     perprev = int(100 * batprev);
@@ -1030,7 +1161,7 @@ void loop() {
     ATB = millis();
 
     if (power > 0) {
-      KWHR = KWHR + ((ATB - ATBprev) * 0.00000027777777) * (power);
+      //KWHR = KWHR + ((ATB - ATBprev) * 0.00000027777777) * (power);
     }
 
     if (current > 0) {
@@ -1084,13 +1215,13 @@ void loop() {
     rpmprev = rpm;
     rpmdegprev = rpmdeg;
     currentprev = current;
-    voltyprev = volty;
+    //voltyprev = volty;  not being used
     voltageprev = voltage;
     v9yprev = v9y;
     v8prev = v8;
-    val7prev = val7;
-    val6prev = val6;
-    val5prev = val5;
+    //val7prev = val7; not being used
+    //val6prev = val6; not being used
+    //val5prev = val5; not being used
     batprev = bat;
     ATBprev = ATB;
 
@@ -1187,10 +1318,12 @@ void loop() {
 
     if (count1 == 30) {
       tft.setFontScale(1);
+      //if reset is selected
       if (arrowTOG == true) {
         KWHR = 0;
         AMPHR = 0;
-
+        flightStart = millis();
+        
         EEPROM.put(eeAddress, KWHR);
         eeAddress += sizeof(float);
         EEPROM.put(eeAddress, AMPHR);
@@ -1199,7 +1332,7 @@ void loop() {
         resetlight = true;
 
       }
-
+      //if SD card is selected
       if (arrowTOG == false) {
 
         SDlog = !SDlog;
@@ -1237,16 +1370,7 @@ void loop() {
   //function for determining which option is selected for rotary encoder
   if (((rQ != rQi) || (rK != rKi)) && (scrolltime <= millis())) {
     arrowTOG = !arrowTOG;
-
-//    tft.fillRect(600, 390, 40, 80, TFT_BLACK);
-
-//    if (arrowTOG == true) {
-//      tft.fillTriangle(615, 395, 615, 415, 630, 405, TFT_WHITE);
-//    }
-//
-//    if (arrowTOG == false) {
-//      tft.fillTriangle(615, 445, 615, 465, 630, 455, TFT_WHITE);
-//    }
+    tft.fillRect(600, 390, 40, 80, TFT_BLACK);
     scrolltime = millis() + 200;
   }
 
