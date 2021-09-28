@@ -25,6 +25,9 @@ CAN_message_t msg;
   Final Instrumentation Layout V1 on 5" display
 */
 
+//general
+#define refreshRate 50 //define how many ms before refreshing screen again
+
 //pins
 #define rotaryButton 2  //define rotary encoder
 
@@ -801,13 +804,11 @@ void visual2()
     dialcirccolor(600, 108, 88, 20, powerdeg, 15, TFT_BLUE, -30, 240, degred2, degyellow2, deggreen, degyellow1);
     //VTEXT(517, 73, 95, 30, 0, 1000, PR, PPR, "", 3, 1, 15, 28, 80, 64, 1, TFT_WHITE);
     if (power != powerprev) {
-      tft.setFontScale(1.75);
-      Serial.println(powerprev);
-      Serial.println(power);
-      drawCentreString(String(powerprev),600,85,TFT_BLACK);
-      drawCentreString(String(power),600,85,TFT_WHITE);
-//      VTEXT(517, 73, 95, 30, 0, powerprev, PR, PPR, "", 3, 1, 15, 28, 80, 64, 1, TFT_BLACK);
-//      VTEXT(517, 73, 95, 30, 0, power, PR, PPR, "", 3, 1, 15, 28, 80, 64, 1, TFT_WHITE);
+      tft.setFontScale(2);
+      drawCentreString(String(powerprev,1),600,85,TFT_BLACK);
+      drawCentreString(String(power,1),600,85,TFT_WHITE);
+      //VTEXT(517, 73, 95, 30, 0, powerprev, PR, PPR, "", 3, 1, 15, 28, 80, 64, 1, TFT_BLACK);
+      //VTEXT(517, 73, 95, 30, 0, power, PR, PPR, "", 3, 1, 15, 28, 80, 64, 1, TFT_WHITE);
     }
 
     if (perthrot != perthrotprev) {
@@ -816,6 +817,8 @@ void visual2()
     }
 
     if (voltage != voltageprev) {
+      drawCentreString(String(voltageprev,1) + "v",530,345,TFT_BLACK);
+      drawCentreString(String(voltage,1) + "v",530,345,TFT_WHITE);
       VTEXT(480, 280, 95, 30, 0, voltageprev, PR, PPR, "V", 3, 1, 15, 28, 80, 64, 0, TFT_BLACK);
       VTEXT(480, 280, 95, 30, 0, voltage, PR, PPR, "V", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
     }
@@ -829,18 +832,24 @@ void visual2()
 
     cellvoltage = voltage / celln ;
     cellvoltageprev = voltageprev / celln ;
-Serial.println("TEST");
+    
     if (cellvoltage != cellvoltageprev) {
-      VTEXT(490, 345, 95, 5, 0, cellvoltageprev, PR, PPR, " / CELL", 1, 0.75, 8, 15, 80, 32, 1, TFT_BLACK);
-      VTEXT(490, 345, 95, 5, 0, cellvoltage, PR, PPR, " / CELL", 1, 0.75, 8, 15, 80, 32, 1, TFT_WHITE);
+      tft.setFontScale(1);
+      drawCentreString(String(cellvoltageprev,1) + " /cell",530,345,TFT_BLACK);
+      drawCentreString(String(cellvoltage,1) + " /cell",530,345,TFT_WHITE);
+      //VTEXT(490, 345, 95, 5, 0, cellvoltageprev, PR, PPR, " / CELL", 1, 0.75, 8, 15, 80, 32, 1, TFT_BLACK);
+      //VTEXT(490, 345, 95, 5, 0, cellvoltage, PR, PPR, " / CELL", 1, 0.75, 8, 15, 80, 32, 1, TFT_WHITE);
     }
 
     dialcirccolor(200, 118, 93, 20, rpmdeg, 15, TFT_BLUE, -30, 240, 0, 20, 270, 270);
     
     //rpm
     if (rpm != rpmprev) {
-      VTEXT(135, 85, 140, 0, 0, rpmprev, D, DP, "", 3, 1, 15, 28, 80, 64, 0, TFT_BLACK);
-      VTEXT(135, 85, 140, 0, 0, rpm, D, DP, "", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
+      tft.setFontScale(2);
+      drawCentreString(String(rpmprev,0),200,85,TFT_BLACK);
+      drawCentreString(String(rpm,0),200,85,TFT_WHITE);
+      //VTEXT(135, 85, 140, 0, 0, rpmprev, D, DP, "", 3, 1, 15, 28, 80, 64, 0, TFT_BLACK);
+      //VTEXT(135, 85, 140, 0, 0, rpm, D, DP, "", 3, 1, 15, 28, 80, 64, 0, TFT_WHITE);
     }
     
     //Temperature
@@ -1000,7 +1009,10 @@ void loop() {
   
   readSensors();
   if (updateTime <= millis()) {
+  rpm = rpm +1;
   power = power +.1;
+  perthrot = (perthrot + 1)%100;
+  voltage = voltage + .1;
   }
   SDSave(SDLoggingDelay);
   if (updateTime <= millis()) {
@@ -1293,7 +1305,7 @@ void loop() {
 
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
 
-    updateTime = millis() + 30;
+    updateTime = millis() + refreshRate;
     canONprev = canON;
 
   }
